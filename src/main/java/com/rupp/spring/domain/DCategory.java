@@ -11,9 +11,10 @@ import java.util.Date;
  */
 public class DCategory {
     private Long id;
+    
     private String name;
     private Date createdDate;
-    
+    public DCategory() {}
     public DCategory(Long id, String name) {
         this.id = id;
         this.name = name;

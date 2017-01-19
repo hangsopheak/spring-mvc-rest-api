@@ -16,6 +16,7 @@ public class CategoryDaoImpl {
         categories.add(new DCategory(101L, "Restaurant"));
         categories.add(new DCategory(201L, "Food and Drink"));
         categories.add(new DCategory(301L, "Out Door"));
+        categories.add(new DCategory(302L, null));
     }
 
     /**

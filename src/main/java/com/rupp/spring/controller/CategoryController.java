@@ -33,8 +33,8 @@ public class CategoryController {
         return service.list();
     }
 
-    @GetMapping("/v1/{id}")
-    public ResponseEntity<DCategory> getDCategory(@PathVariable("id") Long id) {
+    @GetMapping("/v1/{xx}")
+    public ResponseEntity<DCategory> getDCategory(@PathVariable("xx") Long id) {
 
         DCategory category = service.get(id);
         if (category == null) {
