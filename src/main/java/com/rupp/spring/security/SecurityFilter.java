@@ -1,47 +1,3 @@
-Spring REST-API : it is used with maven build.
-
-//start jetty server with maven plugin
->>mvn clean jetty:run
-
-Open browsers :
-http://localhost:8080/api/countries/v1/all
-
-
--CRUD REST-APIs :
-
-GET http://localhost:8080/api/categories/v1/all
-GET http://localhost:8080/api/cagetoires/v1/{id}
-
-POST http://localhost:8080/api/cagetoires/v1/{id}
-DELETE http://localhost:8080/api/cagetoires/v1/{id}
-PUT http://localhost:8080/api/cagetoires/v1/{id}
-
-
-Filter Security
-=================
-You must pass either api_key as parameter or X-API-Key as request header to access the Rest-APIs.
-
-ex : http://localhost:8080/api/categories/v1/all?api_key=sd3209Sdkl2DF3dfzsDGEsZ8476
-
-curl command:
-
-curl 'http://localhost:8080/api/categories/v1/all'  -H 'X-API-Key:sd3209Sdkl2DF3dfzsDGEsZ8476'
-
-
-web.xml
-
-  <!--  security filter --> 
-  <filter>  
-     <filter-name>SecurityFilter</filter-name>  
-     <filter-class>com.rupp.spring.security.SecurityFilter</filter-class>  
-</filter> 
-   
-<filter-mapping>  
-    <filter-name>SecurityFilter</filter-name>  
-    <url-pattern>/api/*</url-pattern>  
-</filter-mapping>  
-
-
 /***/
 package com.rupp.spring.security;
 
@@ -83,7 +39,7 @@ public class SecurityFilter implements Filter {
         LOG.info("init Security filter");
         
         /**initialize ip address either here or you get from web.xml*/
-        WHITELISTED_IPS.add("127.0.0.1");
+        //WHITELISTED_IPS.add("127.0.0.1");
         WHITELISTED_IPS.add("192.168.0.1");
         WHITELISTED_IPS.add("10.1.2.29");
     }
@@ -98,8 +54,11 @@ public class SecurityFilter implements Filter {
         final String requestUri = request.getRequestURI();
         
         LOG.debug(">> Request method {} - URI : {}",request.getMethod(), requestUri);
+        
+        LOG.debug(String.format(">> Client's IP address: %s, api_key: %s, X-API-Key: %s", request.getRemoteAddr(), request.getParameter(API_KEY_PARAM),
+                request.getHeader(HEADER_NAME_API_KEY)));
         //check request api_key present ?
-        if (! (verifyApiKey(request) || verifyIpAddress(request))) {
+        if (! (verifyApiKey(request) || verifyIpAddress(request.getRemoteAddr()))) {
             LOG.error("Either the client's IP address is not allowed, API key is invalid");
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Either the client's IP address is not allowed, API key is invalid");
             return;
@@ -123,9 +82,7 @@ public class SecurityFilter implements Filter {
      * @param request
      * @return
      */
-    private boolean verifyIpAddress(HttpServletRequest request) {
-        final String ipAddress = request.getRemoteAddr();
-        LOG.debug(String.format(">> Client's IP address: %s", ipAddress));
+    private boolean verifyIpAddress(String ipAddress) {
         return WHITELISTED_IPS.contains(ipAddress);
     }
     
@@ -136,4 +93,3 @@ public class SecurityFilter implements Filter {
     }
 
 }
-
