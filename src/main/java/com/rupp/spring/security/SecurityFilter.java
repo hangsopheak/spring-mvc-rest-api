@@ -2,6 +2,7 @@
 package com.rupp.spring.security;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,11 +62,23 @@ public class SecurityFilter implements Filter {
         if (! (verifyApiKey(request) || verifyIpAddress(request.getRemoteAddr()))) {
             LOG.error("Either the client's IP address is not allowed, API key is invalid");
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Either the client's IP address is not allowed, API key is invalid");
+            
+            //doErrorJsonFormat(response);
+            
             return;
         }
         
         chain.doFilter(req, resp);
     }
+    
+//    private void doErrorJsonFormat(HttpServletResponse response) throws IOException {
+//        // send error as json format
+//        // Set response content type
+//        response.setContentType("application/json");
+//        response.setCharacterEncoding("utf-8");
+//        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+//        response.getWriter().print("{\"errorMessage\":\"Either the client's IP address is not allowed, API key is invalid\"}");
+//    }
     /**
      * verify api key either request param or request Header
      * @param request
@@ -79,8 +92,6 @@ public class SecurityFilter implements Filter {
     
     /**
      * verify api key either request param or request Header
-     * @param request
-     * @return
      */
     private boolean verifyIpAddress(String ipAddress) {
         return WHITELISTED_IPS.contains(ipAddress);
