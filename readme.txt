@@ -28,19 +28,26 @@ curl 'http://localhost:8080/api/categories/v1/all'  --user 'test:test123'
 
 web.xml
 
-  <!--  security filter --> 
-  <filter>  
-     <filter-name>SecurityFilter</filter-name>  
-     <filter-class>com.rupp.spring.security.SecurityFilter</filter-class>  
-</filter> 
-   
-<filter-mapping>  
-    <filter-name>SecurityFilter</filter-name>  
-    <url-pattern>/api/*</url-pattern>  
-</filter-mapping>  
-
-
-/***/
+  <!--  security Spring interceptor --> 
+  @EnableWebMvc //mvc:annotation-driven
+@Configuration
+@ComponentScan(value = {"com.rupp.spring.controller", "com.rupp.spring.service", "com.rupp.spring.dao"})
+public class MvcConfig extends WebMvcConfigurerAdapter {
+    
+    .....
+    
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(basicSecurityInterceptor()).addPathPatterns("/**");
+    }     
+    
+    @Bean
+    public BasicSecurityInterceptor basicSecurityInterceptor() {
+        return new BasicSecurityInterceptor();
+    }
+    ...
+}
+==========
 /***/
 package com.rupp.spring.security;
 
@@ -48,75 +55,65 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
 /**
  * @author Sophea <a href='mailto:smak@dminc.com'> sophea </a>
  * @version $id$ - $Revision$
  * @date 2017
  */
-public class SecurityFilter implements Filter {
-    private static final Logger LOG = LoggerFactory.getLogger(SecurityFilter.class);
+public class BasicSecurityInterceptor extends HandlerInterceptorAdapter   {
+    private static final Logger LOG = LoggerFactory.getLogger(BasicSecurityInterceptor.class);
     private static final String BASIC = "BASIC ";
-    //username as key and value is password
-    private static final Map<String,String> USERS = new HashMap<>();
     
-    @Override
-    public void init(FilterConfig arg0) throws ServletException {
-        LOG.info("init Security filter");
+    public BasicSecurityInterceptor() {
+        LOG.info("========init BasicSecurityInterceptor=======");
         USERS.put("admin", "admin123");
         USERS.put("test", "test123");
         
     }
-    /* (non-Javadoc)
-     * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest, javax.servlet.ServletResponse, javax.servlet.FilterChain)
-     */
+    //username as key and value is password
+    private static final Map<String,String> USERS = new HashMap<>();
+    
+    
     @Override
-    public void doFilter(ServletRequest req, ServletResponse resp, FilterChain chain) throws IOException, ServletException {
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         
-        HttpServletRequest request = (HttpServletRequest) req;
-        HttpServletResponse response = (HttpServletResponse) resp;
         final String requestUri = request.getRequestURI();
         
-        LOG.debug(">> Request method {} - URI : {}",request.getMethod(), requestUri);
+         LOG.debug(">> Request method {} - URI : {}",request.getMethod(), requestUri);
         
         final String authorization = request.getHeader("Authorization");
         if (authorization == null) { // no auth
             doErrorJsonFormat(response);
-            return;
+            return false;
         }
         if (!authorization.toUpperCase().startsWith(BASIC)) {
             doErrorJsonFormat(response);
-            return;
+            return false;
         }
         // Get encoded user and password, comes after "BASIC "
         // Decode it, using any base 64 decoder
         String authValue = new String(Base64.decodeBase64(authorization.substring(BASIC.length())));
         String username = getClientUsername(authValue);
         String secret = getClientPassword(authValue);
-        
-        
-        LOG.debug(String.format(">> Client's IP address: %s, username: %s, password: %s", request.getRemoteAddr(), username, secret));
-        
-        //check username / password
-        final String realPassword = USERS.get(username); 
+
+        LOG.debug(String.format(">> Client's IP address: %s, username: %s, password: %s", request.getRemoteAddr(), username,
+                secret));
+
+        // check username / password
+        final String realPassword = USERS.get(username);
         if (realPassword == null || secret == null || !secret.equals(realPassword)) {
             doErrorJsonFormat(response);
-            return;
+            return false;
         }
-        
-        chain.doFilter(req, resp);
+        return super.preHandle(request, response, handler);
     }
     
     private void doErrorJsonFormat(HttpServletResponse response) throws IOException {
@@ -126,7 +123,7 @@ public class SecurityFilter implements Filter {
         response.setContentType("application/json");
         response.setCharacterEncoding("utf-8");
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.getWriter().print("{\"errorMessage\":\"username and password is invalid\"}");
+        response.getWriter().print("{\"errorMessage\":\"username and password is invalid\",\"statusCode\":401}");
     }
     
     private String getClientUsername(final String authValue) {
@@ -146,12 +143,7 @@ public class SecurityFilter implements Filter {
         }
         return password;
     }    
-    
-    @Override
-    public void destroy() {
-
-    }
 }
 
-}
+
 

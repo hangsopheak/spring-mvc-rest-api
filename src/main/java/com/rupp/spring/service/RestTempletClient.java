@@ -1,7 +1,6 @@
 /***/
 package com.rupp.spring.service;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -13,8 +12,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rupp.spring.domain.DCategory;
 
@@ -24,12 +21,10 @@ import com.rupp.spring.domain.DCategory;
  * @date 2017
  */
 public class RestTempletClient {
-
     public static final String REST_SERVICE_URI = "http://localhost:8080/api";
     private static ObjectMapper mapper = new ObjectMapper();
-    /*
-     * Add HTTP Authorization header, using Basic-Authentication to send user-credentials.
-     */
+    
+    /* Add HTTP Authorization header, using Basic-Authentication to send user-credentials.*/
     private static HttpHeaders getHeaders(){
         String plainCredentials="admin:admin123";
         String base64Credentials = new String(Base64.encodeBase64(plainCredentials.getBytes()));
@@ -40,10 +35,8 @@ public class RestTempletClient {
         return headers;
     }
      
-    /*
-     * Send a GET request to get list of all users.
-     */
-    private static void listAllCategories()  {
+    /** Send a GET request to get list of all users.*/
+    private static void listAllCategories() throws Exception {
         System.out.println("\nTesting listAllCategories API-----------");
         RestTemplate restTemplate = new RestTemplate(); 
          
@@ -52,27 +45,13 @@ public class RestTempletClient {
         
         System.out.println(response.getBody());
         //convert as java object
-        try {
             final List<DCategory> categories = Arrays.asList(mapper.readValue(response.getBody(), DCategory[].class));
             for (DCategory dCategory : categories) {
                 System.out.println(String.format("id : %s, name %s", dCategory.getId(), dCategory.getName()));
             }
-        } catch (JsonParseException e) {
-            e.printStackTrace();
-        } catch (JsonMappingException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
         
     }
-    /**
-     * @param args
-     */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         listAllCategories();
-
     }
-
 }
