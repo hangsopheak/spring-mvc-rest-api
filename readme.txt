@@ -17,15 +17,13 @@ DELETE http://localhost:8080/api/cagetoires/v1/{id}
 PUT http://localhost:8080/api/cagetoires/v1/{id}
 
 
-Filter Security
+Filter Security with Basic Authentication Header
 =================
-You must pass either api_key as parameter or X-API-Key as request header to access the Rest-APIs.
-
-ex : http://localhost:8080/api/categories/v1/all?api_key=sd3209Sdkl2DF3dfzsDGEsZ8476
 
 curl command:
 
-curl 'http://localhost:8080/api/categories/v1/all'  -H 'X-API-Key:sd3209Sdkl2DF3dfzsDGEsZ8476'
+curl 'http://localhost:8080/api/categories/v1/all'  --user 'admin:admin123'
+curl 'http://localhost:8080/api/categories/v1/all'  --user 'test:test123'
 
 
 web.xml
@@ -43,11 +41,12 @@ web.xml
 
 
 /***/
+/***/
 package com.rupp.spring.security;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -58,6 +57,7 @@ import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,24 +68,16 @@ import org.slf4j.LoggerFactory;
  */
 public class SecurityFilter implements Filter {
     private static final Logger LOG = LoggerFactory.getLogger(SecurityFilter.class);
-    /**api_key by request parameter*/
-    private static final String API_KEY_PARAM = "api_key";
-    /**X-API-Key as request Header*/
-    private static final String HEADER_NAME_API_KEY = "X-API-Key";
+    private static final String BASIC = "BASIC ";
+    //username as key and value is password
+    private static final Map<String,String> USERS = new HashMap<>();
     
-    /**whilelistIps*/
-    private static final List<String>  WHITELISTED_IPS = new ArrayList<>();
-    
-    /**value*/
-    private static final String API_KEY_VALUE = "sd3209Sdkl2DF3dfzsDGEsZ8476";
     @Override
     public void init(FilterConfig arg0) throws ServletException {
         LOG.info("init Security filter");
+        USERS.put("admin", "admin123");
+        USERS.put("test", "test123");
         
-        /**initialize ip address either here or you get from web.xml*/
-        WHITELISTED_IPS.add("127.0.0.1");
-        WHITELISTED_IPS.add("192.168.0.1");
-        WHITELISTED_IPS.add("10.1.2.29");
     }
     /* (non-Javadoc)
      * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest, javax.servlet.ServletResponse, javax.servlet.FilterChain)
@@ -98,42 +90,68 @@ public class SecurityFilter implements Filter {
         final String requestUri = request.getRequestURI();
         
         LOG.debug(">> Request method {} - URI : {}",request.getMethod(), requestUri);
-        //check request api_key present ?
-        if (! (verifyApiKey(request) || verifyIpAddress(request))) {
-            LOG.error("Either the client's IP address is not allowed, API key is invalid");
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Either the client's IP address is not allowed, API key is invalid");
+        
+        final String authorization = request.getHeader("Authorization");
+        if (authorization == null) { // no auth
+            doErrorJsonFormat(response);
+            return;
+        }
+        if (!authorization.toUpperCase().startsWith(BASIC)) {
+            doErrorJsonFormat(response);
+            return;
+        }
+        // Get encoded user and password, comes after "BASIC "
+        // Decode it, using any base 64 decoder
+        String authValue = new String(Base64.decodeBase64(authorization.substring(BASIC.length())));
+        String username = getClientUsername(authValue);
+        String secret = getClientPassword(authValue);
+        
+        
+        LOG.debug(String.format(">> Client's IP address: %s, username: %s, password: %s", request.getRemoteAddr(), username, secret));
+        
+        //check username / password
+        final String realPassword = USERS.get(username); 
+        if (realPassword == null || secret == null || !secret.equals(realPassword)) {
+            doErrorJsonFormat(response);
             return;
         }
         
         chain.doFilter(req, resp);
     }
-    /**
-     * verify api key either request param or request Header
-     * @param request
-     * @return
-     */
-    private boolean verifyApiKey(HttpServletRequest request) {
-        return API_KEY_VALUE.equals(request.getHeader(HEADER_NAME_API_KEY))
-                || API_KEY_VALUE.equals(request.getParameter(API_KEY_PARAM));
+    
+    private void doErrorJsonFormat(HttpServletResponse response) throws IOException {
+        LOG.error("username and password is invalid");
+        // send error as json format
+        // Set response content type
+        response.setContentType("application/json");
+        response.setCharacterEncoding("utf-8");
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.getWriter().print("{\"errorMessage\":\"username and password is invalid\"}");
     }
     
-    
-    /**
-     * verify api key either request param or request Header
-     * @param request
-     * @return
-     */
-    private boolean verifyIpAddress(HttpServletRequest request) {
-        final String ipAddress = request.getRemoteAddr();
-        LOG.debug(String.format(">> Client's IP address: %s", ipAddress));
-        return WHITELISTED_IPS.contains(ipAddress);
+    private String getClientUsername(final String authValue) {
+        String username = authValue;
+        final int endIndex = authValue.indexOf(':');
+        if (-1 < endIndex) {
+            username = authValue.substring(0, endIndex);
+        }
+        return username;
     }
-    
+
+    private String getClientPassword(final String authValue) {
+        String password = authValue;
+        final int beginIndex = authValue.indexOf(':');
+        if (-1 < beginIndex) {
+            password = authValue.substring(beginIndex + 1);
+        }
+        return password;
+    }    
     
     @Override
     public void destroy() {
 
     }
+}
 
 }
 

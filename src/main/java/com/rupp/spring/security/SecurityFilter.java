@@ -2,9 +2,8 @@
 package com.rupp.spring.security;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -15,6 +14,7 @@ import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.codec.binary.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,24 +25,16 @@ import org.slf4j.LoggerFactory;
  */
 public class SecurityFilter implements Filter {
     private static final Logger LOG = LoggerFactory.getLogger(SecurityFilter.class);
-    /**api_key by request parameter*/
-    private static final String API_KEY_PARAM = "api_key";
-    /**X-API-Key as request Header*/
-    private static final String HEADER_NAME_API_KEY = "X-API-Key";
+    private static final String BASIC = "BASIC ";
+    //username as key and value is password
+    private static final Map<String,String> USERS = new HashMap<>();
     
-    /**whilelistIps*/
-    private static final List<String>  WHITELISTED_IPS = new ArrayList<>();
-    
-    /**value*/
-    private static final String API_KEY_VALUE = "sd3209Sdkl2DF3dfzsDGEsZ8476";
     @Override
     public void init(FilterConfig arg0) throws ServletException {
         LOG.info("init Security filter");
+        USERS.put("admin", "admin123");
+        USERS.put("test", "test123");
         
-        /**initialize ip address either here or you get from web.xml*/
-        //WHITELISTED_IPS.add("127.0.0.1");
-        WHITELISTED_IPS.add("192.168.0.1");
-        WHITELISTED_IPS.add("10.1.2.29");
     }
     /* (non-Javadoc)
      * @see javax.servlet.Filter#doFilter(javax.servlet.ServletRequest, javax.servlet.ServletResponse, javax.servlet.FilterChain)
@@ -56,47 +48,61 @@ public class SecurityFilter implements Filter {
         
         LOG.debug(">> Request method {} - URI : {}",request.getMethod(), requestUri);
         
-        LOG.debug(String.format(">> Client's IP address: %s, api_key: %s, X-API-Key: %s", request.getRemoteAddr(), request.getParameter(API_KEY_PARAM),
-                request.getHeader(HEADER_NAME_API_KEY)));
-        //check request api_key present ?
-        if (! (verifyApiKey(request) || verifyIpAddress(request.getRemoteAddr()))) {
-            LOG.error("Either the client's IP address is not allowed, API key is invalid");
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Either the client's IP address is not allowed, API key is invalid");
-            
-            //doErrorJsonFormat(response);
-            
+        final String authorization = request.getHeader("Authorization");
+        if (authorization == null) { // no auth
+            doErrorJsonFormat(response);
+            return;
+        }
+        if (!authorization.toUpperCase().startsWith(BASIC)) {
+            doErrorJsonFormat(response);
+            return;
+        }
+        // Get encoded user and password, comes after "BASIC "
+        // Decode it, using any base 64 decoder
+        String authValue = new String(Base64.decodeBase64(authorization.substring(BASIC.length())));
+        String username = getClientUsername(authValue);
+        String secret = getClientPassword(authValue);
+        
+        
+        LOG.debug(String.format(">> Client's IP address: %s, username: %s, password: %s", request.getRemoteAddr(), username, secret));
+        
+        //check username / password
+        final String realPassword = USERS.get(username); 
+        if (realPassword == null || secret == null || !secret.equals(realPassword)) {
+            doErrorJsonFormat(response);
             return;
         }
         
         chain.doFilter(req, resp);
     }
     
-//    private void doErrorJsonFormat(HttpServletResponse response) throws IOException {
-//        // send error as json format
-//        // Set response content type
-//        response.setContentType("application/json");
-//        response.setCharacterEncoding("utf-8");
-//        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-//        response.getWriter().print("{\"errorMessage\":\"Either the client's IP address is not allowed, API key is invalid\"}");
-//    }
-    /**
-     * verify api key either request param or request Header
-     * @param request
-     * @return
-     */
-    private boolean verifyApiKey(HttpServletRequest request) {
-        return API_KEY_VALUE.equals(request.getHeader(HEADER_NAME_API_KEY))
-                || API_KEY_VALUE.equals(request.getParameter(API_KEY_PARAM));
+    private void doErrorJsonFormat(HttpServletResponse response) throws IOException {
+        LOG.error("username and password is invalid");
+        // send error as json format
+        // Set response content type
+        response.setContentType("application/json");
+        response.setCharacterEncoding("utf-8");
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.getWriter().print("{\"errorMessage\":\"username and password is invalid\"}");
     }
     
-    
-    /**
-     * verify api key either request param or request Header
-     */
-    private boolean verifyIpAddress(String ipAddress) {
-        return WHITELISTED_IPS.contains(ipAddress);
+    private String getClientUsername(final String authValue) {
+        String username = authValue;
+        final int endIndex = authValue.indexOf(':');
+        if (-1 < endIndex) {
+            username = authValue.substring(0, endIndex);
+        }
+        return username;
     }
-    
+
+    private String getClientPassword(final String authValue) {
+        String password = authValue;
+        final int beginIndex = authValue.indexOf(':');
+        if (-1 < beginIndex) {
+            password = authValue.substring(beginIndex + 1);
+        }
+        return password;
+    }    
     
     @Override
     public void destroy() {
